@@ -25,9 +25,10 @@ jobs:
       with:
         name: orion
         path: build/libs
-    - name: Plugin compatibility
-      uses: thepieterdc/intellij-plugin-verifier-action@v1.3.0
+    - name: IntelliJ Plugin Verifier
+      uses: thepieterdc/intellij-plugin-verifier-action@1.3.0      
       with:
-        plugin: '/home/runner/work/demo-plugin/demo-plugin/build/distributions/demo-plugin-*'
+        plugin: 'build/libs/orion.zip'
         versions: |
           LATEST
+          2020.3

@@ -1,5 +1,3 @@
-# This is a basic workflow to help you get started with Actions
-
 name: Autobuild and validate Plugin
 
 # Controls when the action will run. 
@@ -9,14 +7,108 @@ on:
     branches: [ master, develop, action-test-1 ]
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+
+# Jobs to perform autobuild and release
 jobs:
-  gradle:
+  # Validate Gradle
+  gradleValidation:
+    name: gradle validation
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+      - uses: actions/checkout@v2
+      - uses: gradle/wrapper-validation-action@v1.0.3
+  
+  # Tests gradle and tests the gradlewrapper
+  test:
+    name: Test GradleTasks
+    needs: gradleValidation
+    runs-on: ubuntu-latest
+    steps:
+      - name: JavaSetup
+        uses: actions/setup-java@v1
+        with:
+          java-version: 15
+      - uses: actions/checkout@v2
+      # Cache Gradle Dependencies
+      - name: Setup Gradle Dependencies Cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle.properties') }}
+
+      # Cache Gradle Wrapper
+      - name: Setup Gradle Wrapper Cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
+
+      
+      # Run detekt, ktlint and tests
+      - name: Run Linters and Test
+        run: ./gradlew check
+
+      # Run verifyPlugin Gradle task
+      - name: Verify Plugin
+        run: ./gradlew verifyPlugin    
+    
+  # Build plugin with buildPlugin Gradle task and provide the artifact for the next workflow jobs
+  # Requires test job to be passed
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.properties.outputs.name }}
+      version: ${{ steps.properties.outputs.version }}
+      changelog: ${{ steps.properties.outputs.changelog }}
+      artifact: ${{ steps.properties.outputs.artifact }}
+    steps:
+      # Setup Java 1.8 environment for the next steps
+      - name: Setup Java
+        uses: actions/setup-java@v1
+        with:
+          java-version: 15
+
+      # Check out current repository
+      - name: Fetch Sources
+        uses: actions/checkout@v2
+
+      # Cache Gradle Dependencies
+      - name: Setup Gradle Dependencies Cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle.properties') }}
+
+      # Cache Gradle Wrapper
+      - name: Setup Gradle Wrapper Cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
+
+      # Build artifact using buildPlugin Gradle task
+      - name: Build Plugin
+        run: ./gradlew buildPlugin
+
+      # Upload plugin artifact to make it available in the next jobs
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: orion
+          path: ./build/libs
+    
+  # Verify Plugin
+  verify:
+    name: Verify
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
     - uses: actions/setup-java@v1
       with:
         java-version: 15
+    - uses: actions/checkout@v2
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     - run: ./gradlew buildPlugin

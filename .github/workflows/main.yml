@@ -29,5 +29,4 @@ jobs:
       with:
         plugin: 'build/libs/orion.zip'
         versions: |
-          LATEST
           2020.3
